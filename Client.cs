@@ -6,7 +6,6 @@ public sealed class Client
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
 
-    // Используем DateOnly для дат без времени, как рекомендовано в современном EF Core
     public DateOnly? BirthDate { get; set; }
 
     public string? Phone { get; set; }
