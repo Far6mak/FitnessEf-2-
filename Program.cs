@@ -1,33 +1,54 @@
 ﻿using FitnessEf;
 using Microsoft.EntityFrameworkCore;
 
-await using var db = new FitnessContext();
-
-Console.WriteLine("=== 10.1. Проверка нового свойства Note ===");
-
-// Найдем клиента с ID 1 и добавим ему заметку
-var client = await db.Clients.FindAsync(1);
-
-if (client != null)
+// 11.1. Базовая обработка ошибок (try-catch)
+try
 {
-    client.Note = "VIP-клиент, постоянные персональные тренировки";
-    await db.SaveChangesAsync();
-    Console.WriteLine($"Клиенту {client.FirstName} добавлена заметка: {client.Note}");
+    await using var db = new FitnessContext();
+
+    // 11.4. Диагностика SQL (ToQueryString)
+    Console.WriteLine("=== 11.4. Диагностика SQL ===");
+
+    // Создаем запрос, но пока НЕ выполняем его (IQueryable)
+    var query = db.Clients
+        .Where(c => c.Status == "active")
+        .OrderBy(c => c.LastName);
+
+    Console.WriteLine("EF Core сгенерировал следующий SQL для базы данных:");
+    Console.WriteLine(query.ToQueryString()); // Выводим SQL-код в консоль
+
+    // 11.2. Асинхронное выполнение и 11.3. Сравнение tracking / no-tracking
+    Console.WriteLine("\n=== 11.2 и 11.3. Выполнение запроса (Async) ===");
+
+    // Только чтение: AsNoTracking() экономит память
+    var activeClients = await query.AsNoTracking().ToListAsync();
+    Console.WriteLine($"Найдено активных клиентов: {activeClients.Count}");
+
+    // Изменение: объект отслеживается контекстом (без AsNoTracking)
+    var clientToUpdate = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == 1);
+    if (clientToUpdate is not null)
+    {
+        clientToUpdate.Status = "inactive"; // EF Core "видит" это изменение
+        await db.SaveChangesAsync();        // Асинхронно сохраняем
+        Console.WriteLine("Клиенту с ID 1 изменен статус на 'inactive'.");
+    }
 }
-else
+catch (InvalidOperationException ex)
 {
-    Console.WriteLine("Клиент с ID 1 не найден.");
+    // Ошибка конфигурации (например, не задана строка подключения)
+    Console.WriteLine($"Ошибка конфигурации: {ex.Message}");
 }
-
-Console.WriteLine("\nВсе текущие заметки:");
-var clientsWithNotes = await db.Clients
-    .AsNoTracking()
-    .Where(c => c.Note != null)
-    .ToListAsync();
-
-foreach (var c in clientsWithNotes)
+catch (DbUpdateException ex)
 {
-    Console.WriteLine($"- {c.FirstName} {c.LastName}: {c.Note}");
+    // Ошибка при сохранении (например, нарушены ограничения БД)
+    Console.WriteLine("Ошибка сохранения данных в БД.");
+    Console.WriteLine($"Причина: {ex.GetBaseException().Message}");
+}
+catch (Exception ex)
+{
+    // Общий перехват (например, если упал PostgreSQL)
+    Console.WriteLine("Произошла непредвиденная ошибка.");
+    Console.WriteLine(ex.Message);
 }
 
 Console.WriteLine("\nНажмите любую клавишу для выхода...");
