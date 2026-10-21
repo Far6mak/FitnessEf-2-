@@ -3,77 +3,54 @@ using Microsoft.EntityFrameworkCore;
 
 await using var db = new FitnessContext();
 
-// 5.1. Фильтрация через Where
-Console.WriteLine("=== 5.1. Только активные клиенты (Where) ===");
-var activeClients = await db.Clients
-    .AsNoTracking()
-    .Where(c => c.Status == "active")
-    .OrderBy(c => c.LastName)
-    .ToListAsync();
+Console.WriteLine("=== Задание 6. Добавление нового клиента ===");
 
-foreach (var c in activeClients)
+// 6.2. Проверка пользовательского ввода (Пункт 6.2)
+Console.Write("Введите имя: ");
+string firstName = Console.ReadLine()?.Trim() ?? string.Empty;
+
+Console.Write("Введите фамилию: ");
+string lastName = Console.ReadLine()?.Trim() ?? string.Empty;
+
+// Проверка на пустоту
+if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
 {
-    Console.WriteLine($"{c.LastName} {c.FirstName} - {c.Status}");
+    Console.WriteLine("Ошибка: Имя и фамилия обязательны для заполнения.");
+    return; // Завершаем программу, если данные неверные
 }
 
-// 5.2. Поиск по фрагменту фамилии
-Console.WriteLine("\n=== 5.2. Поиск по фамилии (Contains) ===");
-Console.Write("Введите фрагмент фамилии для поиска (например, 'Смир' или 'Иван'): ");
-string term = Console.ReadLine()?.Trim() ?? string.Empty;
-
-if (string.IsNullOrWhiteSpace(term))
+// Создаем объект клиента (Пункт 6.1)
+var client = new Client
 {
-    Console.WriteLine("Строка поиска не задана.");
+    FirstName = firstName,
+    LastName = lastName,
+    BirthDate = new DateOnly(2000, 5, 15), // Пример даты
+    Phone = "79995554433",
+    Email = "sokolov@example.com",
+    RegistrationDate = DateOnly.FromDateTime(DateTime.Today),
+    Status = "active"
+};
+
+// 6.3. Обработка DbUpdateException (Пункт 6.3)
+try
+{
+    // Добавляем в контекст
+    db.Clients.Add(client);
+
+    // Сохраняем изменения в БД
+    int saved = await db.SaveChangesAsync();
+
+    Console.WriteLine($"\nУспешно сохранено изменений: {saved}");
+
+    // ID генерируется базой данных (ValueGeneratedOnAdd), 
+    // поэтому оно появится только ПОСЛЕ сохранения.
+    Console.WriteLine($"ID нового клиента в базе: {client.ClientId}");
 }
-else
+catch (DbUpdateException ex)
 {
-    var found = await db.Clients
-        .AsNoTracking()
-        .Where(c => c.LastName.Contains(term)) // Переводится в SQL LIKE '%term%'
-        .OrderBy(c => c.LastName)
-        .ToListAsync();
-
-    Console.WriteLine($"Найдено записей: {found.Count}");
-    foreach (var c in found)
-    {
-        Console.WriteLine($"{c.ClientId}: {c.FirstName} {c.LastName}");
-    }
-}
-
-// 5.3. Поиск по идентификатору
-Console.WriteLine("\n=== 5.3. Поиск по ID (FirstOrDefault) ===");
-int searchId = 2;
-var clientById = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == searchId);
-if (clientById is null)
-    Console.WriteLine($"Клиент с ID {searchId} не найден.");
-else
-    Console.WriteLine($"Найден: {clientById.FirstName} {clientById.LastName}");
-
-// 5.4. Количество и наличие
-Console.WriteLine("\n=== 5.4. Агрегаты (Count, Any) ===");
-int total = await db.Clients.CountAsync();
-bool hasInactive = await db.Clients.AnyAsync(c => c.Status == "inactive");
-int activeCount = await db.Clients.CountAsync(c => c.Status == "active");
-
-Console.WriteLine($"Всего клиентов в базе: {total}");
-Console.WriteLine($"Активных клиентов: {activeCount}");
-Console.WriteLine(hasInactive ? "В базе есть неактивные клиенты." : "Неактивных клиентов нет.");
-
-// 5.5. Постраничная загрузка (Пагинация)
-Console.WriteLine("\n=== 5.5. Постраничная загрузка (Skip, Take) ===");
-int page = 1;
-int pageSize = 2; // Выведем по 2 записи на страницу (у нас в базе 3 записи)
-var pageOfClients = await db.Clients
-    .AsNoTracking()
-    .OrderBy(c => c.ClientId)
-    .Skip((page - 1) * pageSize) // Пропускаем записи предыдущих страниц
-    .Take(pageSize)              // Берем только pageSize записей
-    .ToListAsync();
-
-Console.WriteLine($"--- Страница {page} ---");
-foreach (var c in pageOfClients)
-{
-    Console.WriteLine($"{c.ClientId}: {c.FirstName} {c.LastName}");
+    Console.WriteLine("\nНе удалось сохранить клиента. Проверьте данные и ограничения БД.");
+    // GetBaseException() достает суть ошибки из недр EF Core (например, нарушение NOT NULL)
+    Console.WriteLine($"Причина: {ex.GetBaseException().Message}");
 }
 
 Console.WriteLine("\nНажмите любую клавишу для выхода...");
