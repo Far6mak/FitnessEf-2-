@@ -3,54 +3,54 @@ using Microsoft.EntityFrameworkCore;
 
 await using var db = new FitnessContext();
 
-// --- 8.1. NULL и nullable-свойства ---
-Console.WriteLine("=== 8.1. Поиск клиентов без Email (IS NULL) ===");
+// --- 9.4. Добавление посещения ---
+Console.WriteLine("=== 9.4. Добавление посещения ===");
+int clientId = 1; // Берем ИД первого клиента (Иван Иванов)
 
-// В C# проверка c.Email == null транслируется в SQL: WHERE email IS NULL
-var clientsWithoutEmail = await db.Clients
+// Проверяем, существует ли клиент
+var clientExists = await db.Clients.AnyAsync(c => c.ClientId == clientId);
+if (!clientExists)
+{
+    Console.WriteLine($"Клиента с ID {clientId} нет.");
+}
+else
+{
+    var newVisit = new Visit
+    {
+        ClientId = clientId,
+        VisitDate = DateOnly.FromDateTime(DateTime.Now.AddDays(7)), // Дата через неделю
+        Note = "Записался на первое занятие"
+    };
+
+    db.Visits.Add(newVisit);
+    await db.SaveChangesAsync();
+    Console.WriteLine($"Посещение для клиента {clientId} успешно добавлено.");
+}
+
+// --- 9.5. Чтение клиента вместе с посещениями (Include) ---
+Console.WriteLine("\n=== 9.5. Клиенты и их посещения (Include) ===");
+
+var clientsWithVisits = await db.Clients
     .AsNoTracking()
-    .Where(c => c.Email == null)
+    .Include(c => c.Visits) // Загружаем связанные данные (JOIN в SQL)
     .OrderBy(c => c.ClientId)
     .ToListAsync();
 
-if (clientsWithoutEmail.Count == 0)
-    Console.WriteLine("Клиентов без email не найдено.");
-else
+foreach (var client in clientsWithVisits)
 {
-    foreach (var c in clientsWithoutEmail)
+    Console.WriteLine($"\nКлиент: {client.FirstName} {client.LastName}");
+
+    if (client.Visits.Count == 0)
     {
-        Console.WriteLine($"{c.ClientId}: {c.FirstName} {c.LastName} (Email не указан)");
+        Console.WriteLine("  Нет посещений.");
     }
-}
-
-// --- 8.4. Проверка соответствия схеме ---
-Console.WriteLine("\n=== 8.4. Проверка ограничений БД (длина строки) ===");
-Console.WriteLine("Пытаемся сохранить имя длиной 150 символов...");
-
-try
-{
-    // В нашем FitnessContext мы задали для FirstName ограничение HasMaxLength(100)
-    // Создадим строку из 150 символов 'А'
-    string tooLongName = new string('А', 150);
-
-    var invalidClient = new Client
+    else
     {
-        FirstName = tooLongName, // Нарушаем ограничение в 100 символов!
-        LastName = "Тестов",
-        RegistrationDate = DateOnly.FromDateTime(DateTime.Today),
-        Status = "active"
-    };
-
-    db.Clients.Add(invalidClient);
-    await db.SaveChangesAsync();
-
-    Console.WriteLine("Сохранено (чего не должно было случиться).");
-}
-catch (DbUpdateException ex)
-{
-    // EF Core перехватит ошибку от PostgreSQL
-    Console.WriteLine("Ошибка при сохранении! База данных отклонила запрос.");
-    Console.WriteLine($"Сообщение от PostgreSQL: {ex.GetBaseException().Message}");
+        foreach (var visit in client.Visits)
+        {
+            Console.WriteLine($"  - {visit.VisitDate}: {visit.Note}");
+        }
+    }
 }
 
 Console.WriteLine("\nНажмите любую клавишу для выхода...");

@@ -12,4 +12,7 @@ public sealed class Client
     public string? Email { get; set; }
     public DateOnly RegistrationDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     public string Status { get; set; } = "active";
+
+    // Связь один-ко-многим: у клиента может быть много посещений
+    public List<Visit> Visits { get; set; } = new();
 }
