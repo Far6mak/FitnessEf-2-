@@ -3,71 +3,55 @@ using Microsoft.EntityFrameworkCore;
 
 await using var db = new FitnessContext();
 
-// --- 7.1. Изменение отслеживаемого объекта ---
-Console.WriteLine("=== 7.1. Изменение телефона клиента ===");
-Console.Write("Введите ID клиента для изменения телефона (например, 1, 2 или 3): ");
-if (int.TryParse(Console.ReadLine(), out int updateId))
+// --- 8.1. NULL и nullable-свойства ---
+Console.WriteLine("=== 8.1. Поиск клиентов без Email (IS NULL) ===");
+
+// В C# проверка c.Email == null транслируется в SQL: WHERE email IS NULL
+var clientsWithoutEmail = await db.Clients
+    .AsNoTracking()
+    .Where(c => c.Email == null)
+    .OrderBy(c => c.ClientId)
+    .ToListAsync();
+
+if (clientsWithoutEmail.Count == 0)
+    Console.WriteLine("Клиентов без email не найдено.");
+else
 {
-    // FindAsync сначала ищет объект в памяти (Change Tracker), затем в БД
-    var clientToUpdate = await db.Clients.FindAsync(updateId);
-
-    if (clientToUpdate is null)
+    foreach (var c in clientsWithoutEmail)
     {
-        Console.WriteLine("Клиент с таким ID не найден.");
-    }
-    else
-    {
-        Console.WriteLine($"Текущий телефон клиента {clientToUpdate.FirstName}: {clientToUpdate.Phone ?? "не указан"}");
-
-        // Меняем свойство. EF Core сразу же помечает объект как Modified.
-        clientToUpdate.Phone = "79990001122";
-
-        // Без этой строки изменения НЕ сохранятся в базу! (Пункт 7.3)
-        await db.SaveChangesAsync();
-        Console.WriteLine("Телефон успешно изменен.");
+        Console.WriteLine($"{c.ClientId}: {c.FirstName} {c.LastName} (Email не указан)");
     }
 }
 
-// --- 7.2. Удаление ---
-Console.WriteLine("\n=== 7.2. Удаление клиента ===");
-Console.Write("Введите ID клиента для удаления (например, тот, что добавляли в Задании 6): ");
-if (int.TryParse(Console.ReadLine(), out int deleteId))
-{
-    var clientToDelete = await db.Clients.FindAsync(deleteId);
+// --- 8.4. Проверка соответствия схеме ---
+Console.WriteLine("\n=== 8.4. Проверка ограничений БД (длина строки) ===");
+Console.WriteLine("Пытаемся сохранить имя длиной 150 символов...");
 
-    if (clientToDelete is null)
+try
+{
+    // В нашем FitnessContext мы задали для FirstName ограничение HasMaxLength(100)
+    // Создадим строку из 150 символов 'А'
+    string tooLongName = new string('А', 150);
+
+    var invalidClient = new Client
     {
-        Console.WriteLine("Клиент с таким ID не найден.");
-    }
-    else
-    {
-        db.Clients.Remove(clientToDelete); // Помечаем на удаление
-        await db.SaveChangesAsync();       // Выполняем DELETE
-        Console.WriteLine($"Клиент {clientToDelete.FirstName} {clientToDelete.LastName} удален.");
-    }
+        FirstName = tooLongName, // Нарушаем ограничение в 100 символов!
+        LastName = "Тестов",
+        RegistrationDate = DateOnly.FromDateTime(DateTime.Today),
+        Status = "active"
+    };
+
+    db.Clients.Add(invalidClient);
+    await db.SaveChangesAsync();
+
+    Console.WriteLine("Сохранено (чего не должно было случиться).");
 }
-
-// --- 7.4. Несколько действий перед сохранением ---
-Console.WriteLine("\n=== 7.4. Несколько действий за один SaveChanges ===");
-// 1. Создаем нового клиента
-db.Clients.Add(new Client
+catch (DbUpdateException ex)
 {
-    FirstName = "Анна",
-    LastName = "Смирнова",
-    RegistrationDate = DateOnly.FromDateTime(DateTime.Today),
-    Status = "active"
-});
-
-// 2. Находим существующего клиента с ID 2 и меняем его статус
-var existing = await db.Clients.FindAsync(2);
-if (existing is not null)
-{
-    existing.Status = "inactive";
+    // EF Core перехватит ошибку от PostgreSQL
+    Console.WriteLine("Ошибка при сохранении! База данных отклонила запрос.");
+    Console.WriteLine($"Сообщение от PostgreSQL: {ex.GetBaseException().Message}");
 }
-
-// 3. Сохраняем ОБА изменения (и INSERT, и UPDATE) одной транзакцией
-await db.SaveChangesAsync();
-Console.WriteLine("Новый клиент добавлен, а клиенту с ID 2 изменен статус. Все сохранено одной командой.");
 
 Console.WriteLine("\nНажмите любую клавишу для выхода...");
 Console.ReadKey();
