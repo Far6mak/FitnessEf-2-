@@ -3,55 +3,71 @@ using Microsoft.EntityFrameworkCore;
 
 await using var db = new FitnessContext();
 
-Console.WriteLine("=== Задание 6. Добавление нового клиента ===");
-
-// 6.2. Проверка пользовательского ввода (Пункт 6.2)
-Console.Write("Введите имя: ");
-string firstName = Console.ReadLine()?.Trim() ?? string.Empty;
-
-Console.Write("Введите фамилию: ");
-string lastName = Console.ReadLine()?.Trim() ?? string.Empty;
-
-// Проверка на пустоту
-if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+// --- 7.1. Изменение отслеживаемого объекта ---
+Console.WriteLine("=== 7.1. Изменение телефона клиента ===");
+Console.Write("Введите ID клиента для изменения телефона (например, 1, 2 или 3): ");
+if (int.TryParse(Console.ReadLine(), out int updateId))
 {
-    Console.WriteLine("Ошибка: Имя и фамилия обязательны для заполнения.");
-    return; // Завершаем программу, если данные неверные
+    // FindAsync сначала ищет объект в памяти (Change Tracker), затем в БД
+    var clientToUpdate = await db.Clients.FindAsync(updateId);
+
+    if (clientToUpdate is null)
+    {
+        Console.WriteLine("Клиент с таким ID не найден.");
+    }
+    else
+    {
+        Console.WriteLine($"Текущий телефон клиента {clientToUpdate.FirstName}: {clientToUpdate.Phone ?? "не указан"}");
+
+        // Меняем свойство. EF Core сразу же помечает объект как Modified.
+        clientToUpdate.Phone = "79990001122";
+
+        // Без этой строки изменения НЕ сохранятся в базу! (Пункт 7.3)
+        await db.SaveChangesAsync();
+        Console.WriteLine("Телефон успешно изменен.");
+    }
 }
 
-// Создаем объект клиента (Пункт 6.1)
-var client = new Client
+// --- 7.2. Удаление ---
+Console.WriteLine("\n=== 7.2. Удаление клиента ===");
+Console.Write("Введите ID клиента для удаления (например, тот, что добавляли в Задании 6): ");
+if (int.TryParse(Console.ReadLine(), out int deleteId))
 {
-    FirstName = firstName,
-    LastName = lastName,
-    BirthDate = new DateOnly(2000, 5, 15), // Пример даты
-    Phone = "79995554433",
-    Email = "sokolov@example.com",
+    var clientToDelete = await db.Clients.FindAsync(deleteId);
+
+    if (clientToDelete is null)
+    {
+        Console.WriteLine("Клиент с таким ID не найден.");
+    }
+    else
+    {
+        db.Clients.Remove(clientToDelete); // Помечаем на удаление
+        await db.SaveChangesAsync();       // Выполняем DELETE
+        Console.WriteLine($"Клиент {clientToDelete.FirstName} {clientToDelete.LastName} удален.");
+    }
+}
+
+// --- 7.4. Несколько действий перед сохранением ---
+Console.WriteLine("\n=== 7.4. Несколько действий за один SaveChanges ===");
+// 1. Создаем нового клиента
+db.Clients.Add(new Client
+{
+    FirstName = "Анна",
+    LastName = "Смирнова",
     RegistrationDate = DateOnly.FromDateTime(DateTime.Today),
     Status = "active"
-};
+});
 
-// 6.3. Обработка DbUpdateException (Пункт 6.3)
-try
+// 2. Находим существующего клиента с ID 2 и меняем его статус
+var existing = await db.Clients.FindAsync(2);
+if (existing is not null)
 {
-    // Добавляем в контекст
-    db.Clients.Add(client);
-
-    // Сохраняем изменения в БД
-    int saved = await db.SaveChangesAsync();
-
-    Console.WriteLine($"\nУспешно сохранено изменений: {saved}");
-
-    // ID генерируется базой данных (ValueGeneratedOnAdd), 
-    // поэтому оно появится только ПОСЛЕ сохранения.
-    Console.WriteLine($"ID нового клиента в базе: {client.ClientId}");
+    existing.Status = "inactive";
 }
-catch (DbUpdateException ex)
-{
-    Console.WriteLine("\nНе удалось сохранить клиента. Проверьте данные и ограничения БД.");
-    // GetBaseException() достает суть ошибки из недр EF Core (например, нарушение NOT NULL)
-    Console.WriteLine($"Причина: {ex.GetBaseException().Message}");
-}
+
+// 3. Сохраняем ОБА изменения (и INSERT, и UPDATE) одной транзакцией
+await db.SaveChangesAsync();
+Console.WriteLine("Новый клиент добавлен, а клиенту с ID 2 изменен статус. Все сохранено одной командой.");
 
 Console.WriteLine("\nНажмите любую клавишу для выхода...");
 Console.ReadKey();
