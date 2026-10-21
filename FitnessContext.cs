@@ -62,6 +62,9 @@ public sealed class FitnessContext : DbContext
                   .HasColumnName("status")
                   .HasMaxLength(20)
                   .IsRequired();
+            entity.Property(c => c.Note)
+                  .HasColumnName("note")
+                  .HasMaxLength(300);
         });
         modelBuilder.Entity<Visit>(entity =>
         {

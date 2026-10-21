@@ -15,4 +15,6 @@ public sealed class Client
 
     // Связь один-ко-многим: у клиента может быть много посещений
     public List<Visit> Visits { get; set; } = new();
+
+    public string? Note { get; set; }
 }
